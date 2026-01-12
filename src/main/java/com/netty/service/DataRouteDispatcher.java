@@ -1,15 +1,12 @@
 package com.netty.service;
 
 import com.alibaba.fastjson.JSON;
-import com.netty.core.ModbusDataParser;
 import com.netty.core.ModbusFrame;
 import com.netty.core.common.DeviceConfig;
-import io.netty.buffer.ByteBufUtil;
+import com.netty.util.RedisUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
@@ -28,13 +25,16 @@ public class DataRouteDispatcher {
     // 静态持有者，供非 Spring 类使用
     private static DataRouteDispatcher instance;
 
-    @Autowired(required = false)
-    private StringRedisTemplate redisTemplate;
-    @Autowired(required = false)
-    private RabbitTemplate rabbitTemplate;
+    private final RedisUtils redisUtils;
+    private final RabbitTemplate rabbitTemplate;
 
     @Value("${modbus.output-mode:console}")
     private String outputMode;
+
+    public DataRouteDispatcher(RedisUtils redisUtils, RabbitTemplate rabbitTemplate) {
+        this.redisUtils = redisUtils;
+        this.rabbitTemplate = rabbitTemplate;
+    }
 
     @PostConstruct
     public void init() {
@@ -62,46 +62,28 @@ public class DataRouteDispatcher {
 
         // 2. 正常报文解析
         Map<String, Object> dataMap = new HashMap<>();
-        dataMap.put("deviceId", device.getId());
+        dataMap.put("ip", device.getIp());
+        dataMap.put("port", device.getPort());
         dataMap.put("slaveId", device.getSlaveId());
         dataMap.put("fc", fc);
         dataMap.put("timestamp", System.currentTimeMillis());
 
-        // 解析 Payload (根据功能码)
-        byte[] payload = response.getPayload();
-        if (fc == 3 || fc == 4) {
-            // 寄存器读取解析：[字节计数(1byte), 数据(n bytes)]
-            dataMap.put("values", ModbusDataParser.parseRegisters(payload));
-        } else if (fc == 1 || fc == 2) {
-            // 线圈解析
-            dataMap.put("values", ModbusDataParser.parseBits(payload));
-        } else {
-            // 写入类响应通常返回起始地址和写入值，原样输出
-            dataMap.put("raw", ByteBufUtil.hexDump(payload));
-        }
-
-
-        // 3. 执行分发
-        String json = JSON.toJSONString(dataMap);
-
-        // 3. 执行分发
-        executeSend(json, device.getId());
+        executeSend(dataMap, device.getId());
     }
 
-    private void executeSend(String json, String deviceId) {
+    private void executeSend(Map<String, Object> dataMap, String deviceId) {
         switch (outputMode.toLowerCase()) {
             case "redis":
-                if (redisTemplate != null) {
-                    redisTemplate.opsForValue().set("MODBUS:RT:" + deviceId, json);
-                }
+                    redisUtils.set("MODBUS:RT:" + deviceId, dataMap);
                 break;
             case "rabbitmq":
                 if (rabbitTemplate != null) {
-                    rabbitTemplate.convertAndSend("modbus.exchange", "modbus.key", json);
+                    rabbitTemplate.convertAndSend("modbus.exchange", "modbus.key", dataMap);
                 }
                 break;
             default:
-                log.info("收到数据:" + json);
+                String json = JSON.toJSONString(dataMap);
+                log.info("收到数据:{}", json);
         }
     }
 

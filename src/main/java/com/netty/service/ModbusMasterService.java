@@ -95,9 +95,10 @@ public class ModbusMasterService {
     private void safePoll(DeviceConfig device) {
         String dKey = device.getIp() + ":" + device.getPort() + ":" + device.getSlaveId();
 
-        // 【修正 2】CAS 锁，防止同一个设备被多个线程同时调度
+        // CAS 锁，防止同一个设备被多个线程同时调度
         if (!processingDevices.add(dKey)) {
-            return; // 如果该设备上一次还没跑完，直接跳过本次
+            // 如果该设备上一次还没跑完，直接跳过本次
+            return;
         }
 
         try {
