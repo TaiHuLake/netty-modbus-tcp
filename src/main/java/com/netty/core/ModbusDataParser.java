@@ -7,28 +7,6 @@ package com.netty.core;
  */
 public class ModbusDataParser {
 
-    /**
-     * 解析线圈/离散输入数据 (功能码 01, 02)
-     * 响应格式: [字节计数(1b), 位数据(nb)...]
-     * 注意：位数据在字节内是从低位到高位排列的
-     */
-    public static boolean[] parseBits(byte[] payload) {
-        if (payload == null || payload.length < 2) {
-            return new boolean[0];
-        }
-        int byteCount = payload[0] & 0xFF;
-        boolean[] bits = new boolean[byteCount * 8];
-
-        for (int i = 0; i < byteCount; i++) {
-            byte b = payload[i + 1];
-            for (int j = 0; j < 8; j++) {
-                // Modbus 规范：字节内的第一位（最低位）对应起始地址
-                bits[i * 8 + j] = ((b >> j) & 0x01) == 1;
-            }
-        }
-        return bits;
-    }
-
     public static Object[] parseBits(byte[] payload, int count) {
         // payload[0] 是字节计数，payload[1] 开始是数据
         Object[] bits = new Object[count];
