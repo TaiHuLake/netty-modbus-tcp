@@ -1,9 +1,12 @@
 package com.netty.service;
 
 import com.alibaba.fastjson.JSON;
+import com.netty.core.ModbusDataParser;
 import com.netty.core.ModbusFrame;
 import com.netty.core.common.DeviceConfig;
+import com.netty.core.common.ModbusTask;
 import com.netty.util.RedisUtils;
+import io.netty.buffer.ByteBufUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Value;
@@ -44,15 +47,15 @@ public class DataRouteDispatcher {
     /**
      * 供 Coordinator 调用的静态入口
      */
-    public static void staticDispatch(DeviceConfig device, ModbusFrame response) {
+    public static void staticDispatch(DeviceConfig device, ModbusFrame response, ModbusTask task) {
         if (instance != null) {
-            instance.dispatch(device, response);
+            instance.dispatch(device, response, task);
         } else {
             log.error("Dispatcher 未初始化!");
         }
     }
 
-    public void dispatch(DeviceConfig device, ModbusFrame response) {
+    public void dispatch(DeviceConfig device, ModbusFrame response, ModbusTask task) {
         // 1. 检查是否为异常报文 (功能码 > 0x80)
         int fc = response.getFunctionCode() & 0xFF;
         if (fc > 0x80) {
@@ -62,11 +65,24 @@ public class DataRouteDispatcher {
 
         // 2. 正常报文解析
         Map<String, Object> dataMap = new HashMap<>();
-        dataMap.put("ip", device.getIp());
-        dataMap.put("port", device.getPort());
+        dataMap.put("deviceId", device.getId());
         dataMap.put("slaveId", device.getSlaveId());
         dataMap.put("fc", fc);
         dataMap.put("timestamp", System.currentTimeMillis());
+        int count = task.getCount();
+
+        // 解析 Payload (根据功能码)
+        byte[] payload = response.getPayload();
+        if (fc == 3 || fc == 4) {
+            // 寄存器读取解析：[字节计数(1byte), 数据(n bytes)]
+            dataMap.put("values", ModbusDataParser.parseRegisters(payload));
+        } else if (fc == 1 || fc == 2) {
+            // 线圈解析
+            dataMap.put("values", ModbusDataParser.parseBits(payload, count));
+        } else {
+            // 写入类响应通常返回起始地址和写入值，原样输出
+            dataMap.put("raw", ByteBufUtil.hexDump(payload));
+        }
 
         executeSend(dataMap, device.getId());
     }

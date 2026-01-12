@@ -88,7 +88,7 @@ public class ChannelTaskCoordinator {
                             qTask.getDevice().getIp(), qTask.getDevice().getSlaveId(), ex.getMessage());
                 } else {
                     // 数据分发（这里改为你之前的 Dispatcher）
-                    DataRouteDispatcher.staticDispatch(qTask.getDevice(), res);
+                    DataRouteDispatcher.staticDispatch(qTask.getDevice(), res, qTask.getTask());
                 }
             } finally {
                 // 2. 释放当前通道的“忙碌”状态

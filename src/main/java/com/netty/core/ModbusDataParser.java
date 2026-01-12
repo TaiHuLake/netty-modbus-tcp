@@ -29,6 +29,24 @@ public class ModbusDataParser {
         return bits;
     }
 
+    public static Object[] parseBits(byte[] payload, int count) {
+        // payload[0] 是字节计数，payload[1] 开始是数据
+        Object[] bits = new Object[count];
+        for (int i = 0; i < count; i++) {
+            // 第几个字节
+            int byteIdx = i / 8;
+            // 字节内的第几位
+            int bitIdx = i % 8;
+
+            // 这里的 payload[byteIdx + 1] 跳过第一个字节计数位
+            int val = (payload[byteIdx + 1] & (1 << bitIdx)) != 0 ? 1 : 0;
+
+            // 根据你想要的结果格式，存为 Boolean 或 Integer
+            bits[i] = (val == 1);
+        }
+        return bits;
+    }
+
     /**
      * 解析寄存器数据 (功能码 03, 04)
      * 响应格式: [字节计数(1b), 数据H(1b), 数据L(1b), ...]
