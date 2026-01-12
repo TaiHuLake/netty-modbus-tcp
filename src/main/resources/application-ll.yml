@@ -1,0 +1,25 @@
+server:
+  port: 8081
+spring:
+  application:
+    name: gemini-modbus
+  redis: #redis 参数
+    host: 127.0.0.1
+    port: 6379
+    database: 1
+    password:
+  rabbitmq:
+    password: guest
+    username: guest
+    host: 127.0.0.1
+    port: 5672
+    publisher-returns: true #是否启用【发布返回】
+    template:
+      mandatory: true  # 必须设置成true 消息路由失败通知监听者，而不是将消息丢弃
+# 自定义 Modbus 配置
+modbus:
+  config:
+    connect-timeout: 5000     # 物理连接超时
+    read-timeout: 3000        # 响应等待超时
+    max-connections: 500      # 线程池/连接上限
+    output-mode: console      # 可选: console, redis, rabbitmq
